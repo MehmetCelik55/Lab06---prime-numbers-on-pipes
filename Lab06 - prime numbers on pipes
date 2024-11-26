@@ -1,0 +1,85 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>   
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <string.h>
+
+
+int main(int argc, char* argv[]) {
+    
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s <range>\n", argv[0]);
+        exit(1);
+    }
+
+    
+    int range = atoi(argv[1]);
+    if (range < 2) {
+        fprintf(stderr, "Error: Range must be at least 2.\n");
+        exit(1);
+    }
+
+    
+    int pipefd[2];
+    if (pipe(pipefd) == -1) {
+        perror("pipe");
+        exit(1);
+    }
+
+    pid_t pid_checker, pid_printer;
+
+   
+    if ((pid_checker = fork()) == 0) {
+        close(pipefd[0]);  
+
+        for (int num = 2; num <= range; num++) {
+            int is_prime = 1;
+            for (int i = 2; i * i <= num; i++) {
+                if (num % i == 0) {
+                    is_prime = 0;
+                    break;
+                }
+            }
+            if (is_prime) {
+                
+                if (write(pipefd[1], &num, sizeof(num)) == -1) {
+                    perror("write");
+                    exit(1);
+                }
+            }
+        }
+
+        close(pipefd[1]);  
+        printf("checker: I will now finish\n");
+        exit(0);
+    }
+
+   
+    if ((pid_printer = fork()) == 0) {
+        close(pipefd[1]);  
+
+        int num;
+        while (read(pipefd[0], &num, sizeof(num)) > 0) {
+            printf("printer: %d\n", num);
+        }
+
+        close(pipefd[0]);  
+        printf("printer: I will now finish\n");
+        exit(0);
+    }
+
+    
+    close(pipefd[0]);  
+    close(pipefd[1]);  
+
+   
+    waitpid(pid_checker, NULL, 0);
+    printf("parent: checker finished\n");
+
+   
+    waitpid(pid_printer, NULL, 0);
+    printf("parent: printer finished\n");
+
+    return 0;
+}
